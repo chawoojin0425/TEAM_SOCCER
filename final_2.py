@@ -1,4 +1,5 @@
 import customtkinter as ctk
+# import tkinter as tk
 from PIL import Image, ImageTk
 import cv2
 import numpy as np
@@ -6,38 +7,16 @@ from ultralytics import YOLO
 import os  # 파일 존재 확인을 위해 os 모듈 추가
 
 # =========================================================
-# I. 상수 및 헬퍼 함수 정의
+# I. 상수 및 헬퍼 함수 정의 (변경 없음)
 # =========================================================
 
 MODEL_PATH = 'best.pt'
 TEST_IMAGE_PATH = r'C:\Users\chawo\PycharmProjects\test_photo3(가장 잘나옴).jpg'
-K_CLUSTERS = 3
-BALL_CLASS_ID = 1
-
-# K-means 클러스터 인덱스
-GRASS_CLUSTER_INDEX = 0
-TEAM_OURS_INDEX = 1
-TEAM_OPPONENT_INDEX = 2
-
-# 시각화 색상 (BGR 포맷)
-COLOR_OURS = (255, 0, 0)  # Green
-COLOR_OPPONENT = (0, 0, 255)  # Red
-COLOR_OTHER = (100, 100, 100)  # Gray
-COLOR_BALL = (0, 255, 255)  # Yellow
-
-# 🚨 선수 목록 표시 및 범례를 위한 팀 색상 (CustomTkinter 호환 HEX)
-CTK_COLOR_OURS = "#000080"  # Dark Green for list background (Team 1)
-CTK_COLOR_OPPONENT = "#8B0000"  # Dark Red for list background (Team 2)
-CTK_COLOR_OTHER = "#444444"  # Gray
-
-# (수정) 1번 방식: 수동 목록 매칭을 위한 선수 이름
-OURS_NAMES = ["gk1_Ter_Stegen", "def1_Balde", "def2_Araujo", "def3_Cubarsi", "def4_Christensen", "mid1_Gavi",
-              "mid2_Pedri", "mid3_Fermin", "fw1_Ferran_Torres", "fw2_Lewandowski", "fw3_Lamine"]
-OPPONENT_NAMES = ["fw1_serge_gnabry", "fw2_harry-kane", "fw3_nicolas-jackson", "mid1_joshua_kimmich", "mid2_leon_goretzka", "mid3_jamal_musiala"
-                  , "def1_dayot_upamecano", "def2_minjae-kim", "def3_jonathan-tah", "def4_alphonso_davies","gk1_manuel_neuer"]
 
 
+# ... (기존 상수 및 헬퍼 함수 생략 - get_representative_color, kmeans_clustering, get_center_coords) ...
 
+# (편의상 기존 함수 복사)
 def get_representative_color(img, box_coords):
     """선수의 바운딩 박스 중앙 1/3 영역의 픽셀을 추출합니다."""
     x1, y1, x2, y2 = map(int, box_coords)
@@ -68,14 +47,30 @@ def get_center_coords(box):
     return center_x, center_y
 
 
-# =========================================================
-# II. 핵심 처리 함수: 탐지 및 팀 분류
-# =========================================================
+# K-means 클러스터 인덱스
+GRASS_CLUSTER_INDEX = 0
+TEAM_OURS_INDEX = 1
+TEAM_OPPONENT_INDEX = 2
 
+# 시각화 색상 (BGR 포맷)
+COLOR_OURS = (0, 255, 0)  # Green
+COLOR_OPPONENT = (0, 0, 255)  # Red
+COLOR_OTHER = (100, 100, 100)  # Gray
+COLOR_BALL = (0, 255, 255)  # Yellow
+BALL_CLASS_ID = 1
+
+# (수정) 1번 방식: 수동 목록 매칭을 위한 선수 이름
+OURS_NAMES = ["[GK]Ter_Stegen", "[DF_1]Balde", "[DF_2]Araujo", "[DF_3]Cubarsi", "[DF_4]Christensen", "[MD_1]Gavi",
+              "[MD_2]Pedri", "[MD_3]Fermin", "[FW_1]Ferran_Torres", "[FW_2]Lewandowski", "[FW_3]Lamine"]
+OPPONENT_NAMES = ["[FW_3]nicolas-jackson", "[FW_2]harry-kane", "[FW_1]serge_gnabry",   "[MD_3]jamal_musiala",  "[MD_2]leon_goretzka", "[MD_1]joshua_kimmich"
+                  , "[DF_4]alphonso_davies",  "[DF_3]jonathan-tah", "[DF_2]minjae-kim", "[DF_1]dayot_upamecano", "[GK]manuel_neuer"]
+
+
+# ... (기존 process_detection_and_classification 함수 생략 - 내용 동일) ...
 def process_detection_and_classification(model, image_path):
     """
     YOLO를 실행하여 선수와 공을 탐지하고, K-means를 사용하여 선수에게 팀을 분류한 후,
-    X-좌표 순으로 이름을 할당합니다.
+    X-좌표 순으로 이름을 할당합니다. (기존 로직과 동일)
     """
     img = cv2.imread(image_path)
     if img is None:
@@ -115,7 +110,7 @@ def process_detection_and_classification(model, image_path):
     all_pixels_combined = np.vstack(all_player_pixels)
 
     # 2. K-means 클러스터링
-    labels, cluster_centers = kmeans_clustering(all_pixels_combined, K_CLUSTERS)
+    labels, cluster_centers = kmeans_clustering(all_pixels_combined, 3)
 
     if labels.size == 0:
         print("K-means 클러스터링에 문제가 발생했습니다.")
@@ -158,11 +153,12 @@ def process_detection_and_classification(model, image_path):
 
         current_pixel_index += pixel_count
 
-    # 4. 팀별로 분리 및 X-좌표(가로 위치) 기준으로 정렬
+    # 🚨 4. 팀별로 분리 및 X-좌표(가로 위치) 기준으로 정렬
     ours_list = [p for p in temp_player_data if p['team'] == 'TEAM_OURS']
     opponent_list = [p for p in temp_player_data if p['team'] == 'TEAM_OPPONENT']
     other_list = [p for p in temp_player_data if p['team'] == 'OTHER']
 
+    # X-좌표(center[0])가 작은 순서대로 정렬 (왼쪽 -> 오른쪽)
     ours_list.sort(key=lambda p: p['center'][0])
     opponent_list.sort(key=lambda p: p['center'][0])
 
@@ -173,6 +169,7 @@ def process_detection_and_classification(model, image_path):
     for i, player in enumerate(ours_list):
         name = OURS_NAMES[i] if i < len(OURS_NAMES) else f"Ours Player {i + 1} (Sorted X)"
         player['name'] = name
+        # 고유 식별자 추가
         player['id'] = f"OURS_{i}"
         final_player_data.append(player)
 
@@ -180,6 +177,7 @@ def process_detection_and_classification(model, image_path):
     for i, player in enumerate(opponent_list):
         name = OPPONENT_NAMES[i] if i < len(OPPONENT_NAMES) else f"Opponent Player {i + 1} (Sorted X)"
         player['name'] = name
+        # 고유 식별자 추가
         player['id'] = f"OPPONENT_{i}"
         final_player_data.append(player)
 
@@ -192,17 +190,15 @@ def process_detection_and_classification(model, image_path):
     return img, final_player_data, ball_boxes
 
 
-# =========================================================
-# III. 시각화 함수: 필터링 및 그리기
-# =========================================================
-
+# ... (기존 visualize_results 함수 생략 - 내용 동일) ...
 def visualize_results(original_img, player_data, ball_boxes, filter_type):
     """
-    필터 타입에 따라 선수와 공을 시각화한 이미지를 반환합니다.
+    필터 타입에 따라 선수와 공을 시각화한 이미지를 반환합니다. (기존 로직과 동일)
     """
     if original_img is None:
         return None, []
 
+    # 'NONE' 필터일 경우 원본 이미지를 그대로 반환하고 선수 목록은 비워둡니다.
     if filter_type == 'NONE':
         return original_img.copy(), []
 
@@ -226,6 +222,7 @@ def visualize_results(original_img, player_data, ball_boxes, filter_type):
             for player in player_data:
                 p_center_x, p_center_y = player['center']
 
+                # 모든 공과의 최소 거리 찾기
                 for b_center_x, b_center_y in ball_centers:
                     dist_sq = (p_center_x - b_center_x) ** 2 + (p_center_y - b_center_y) ** 2
 
@@ -248,13 +245,17 @@ def visualize_results(original_img, player_data, ball_boxes, filter_type):
         elif team == "TEAM_OPPONENT":
             color = COLOR_OPPONENT
 
+        # 일반 바운딩 박스
         cv2.rectangle(img_classified, (x1, y1), (x2, y2), color, 2)
 
         text_label = name
 
+        # 'NEAREST_BALL'인 경우, 특별히 표시
         if filter_type == 'NEAREST_BALL' and player is nearest_player:
+            # 가장 가까운 선수에게 노란색 테두리 추가
             cv2.rectangle(img_classified, (x1, y1), (x2, y2), (0, 255, 255), 4)
 
+            # 이름 텍스트 출력
         cv2.putText(img_classified, text_label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
     # 3. 공 시각화
@@ -271,7 +272,7 @@ def visualize_results(original_img, player_data, ball_boxes, filter_type):
 
 
 # =========================================================
-# IV. CustomTkinter GUI 클래스
+# IV. CustomTkinter GUI 클래스 (수정됨)
 # =========================================================
 
 ctk.set_appearance_mode("Dark")
@@ -300,14 +301,57 @@ class App(ctk.CTk):
         self.FRAME_WIDTH = 900
         self.zoom_factor = 1.0  # 줌 배율
 
-        # 선수 프로필 데이터 딕셔너리 (유지)
+        # 🚨 추가: 선수 프로필 데이터 딕셔너리
+        # '선수 ID'를 키로 사용합니다. 선수 ID는 process_detection_and_classification에서 할당됩니다.
         self.player_profiles = {
-            'OURS_0': {'photo': 'player_gk.jpg', 'profile': '포지션: 골키퍼\n나이: 28세\n키: 190cm\n특징: 뛰어난 반사 신경과 빌드업 능력 보유.'},
-            'OURS_1': {'photo': 'player_def.jpg',
-                       'profile': '포지션: 센터백 (왼쪽)\n나이: 25세\n키: 185cm\n특징: 안정적인 수비력과 정확한 롱패스.'},
-            'OURS_2': {'photo': 'player_def.jpg', 'profile': '포지션: 센터백 (오른쪽)\n나이: 30세\n키: 188cm\n특징: 강한 피지컬과 리더십.'},
-            'OPPONENT_0': {'photo': 'opponent_player.jpg', 'profile': '포지션: 공격수\n나이: 22세\n키: 178cm\n특징: 빠른 스피드와 드리블.'},
+            'OURS_0': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team1\gk1_Ter_Stegen.webp',
+                       'profile': '포지션: 골키퍼\n생년월일: 30/04/1992\n키: 187cm\n몸무게: 88kg'},
+            'OURS_1': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team1\def1_Balde.webp',
+                       'profile': '포지션: 수비수\n생년월일: 18/10/2003\n키: 177cm\n몸무게: 76kg'},
+            'OURS_2': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team1\def2_Araujo.webp',
+                       'profile': '포지션: 수비수\n생년월일: 18/10/2003\n키: 177cm\n몸무게: 76kg'},
+            'OURS_3': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team1\def3_Cubarsi.webp',
+                       'profile': '포지션: 수비수\n생년월일: 18/10/2003\n키: 177cm\n몸무게: 76kg'},
+            'OURS_4': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team1\def4_Christensen.webp',
+                       'profile': '포지션: 수비수\n생년월일: 18/10/2003\n키: 177cm\n몸무게: 76kg'},
+            'OURS_5': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team1\mid1_Gavi.webp',
+                       'profile': '포지션: 수비수\n생년월일: 18/10/2003\n키: 177cm\n몸무게: 76kg'},
+            'OURS_6': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team1\mid2_Pedri.webp',
+                       'profile': '포지션: 수비수\n생년월일: 18/10/2003\n키: 177cm\n몸무게: 76kg'},
+            'OURS_7': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team1\mid3_Fermin.webp',
+                       'profile': '포지션: 수비수\n생년월일: 18/10/2003\n키: 177cm\n몸무게: 76kg'},
+            'OURS_8': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team1\fw1_Ferran_Torres.webp',
+                       'profile': '포지션: 수비수\n생년월일: 18/10/2003\n키: 177cm\n몸무게: 76kg'},
+            'OURS_9': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team1\fw2_Lewandowski.webp',
+                       'profile': '포지션: 수비수\n생년월일: 18/10/2003\n키: 177cm\n몸무게: 76kg'},
+            'OURS_10': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team1\fw3_Lamine.webp',
+                       'profile': '포지션: 수비수\n생년월일: 18/10/2003\n키: 177cm\n몸무게: 76kg'},
+            'OPPONENT_10': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team2\gk1_manuel_neuer.avif',
+                           'profile': '포지션: 공격수\n나이: 22세\n키: 178cm\n특징: 빠른 스피드와 드리블.'},
+            'OPPONENT_9': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team2\def1_dayot_upamecano.avif',
+                           'profile': '포지션: 공격수\n나이: 22세\n키: 178cm\n특징: 빠른 스피드와 드리블.'},
+            'OPPONENT_8': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team2\def2_minjae-kim.avif',
+                           'profile': '포지션: 공격수\n나이: 22세\n키: 178cm\n특징: 빠른 스피드와 드리블.'},
+            'OPPONENT_7': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team2\def3_jonathan-tah.avif',
+                           'profile': '포지션: 공격수\n나이: 22세\n키: 178cm\n특징: 빠른 스피드와 드리블.'},
+            'OPPONENT_6': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team2\def4_alphonso_davies.avif',
+                           'profile': '포지션: 공격수\n나이: 22세\n키: 178cm\n특징: 빠른 스피드와 드리블.'},
+            'OPPONENT_5': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team2\mid1_joshua_kimmich.avif',
+                           'profile': '포지션: 공격수\n나이: 22세\n키: 178cm\n특징: 빠른 스피드와 드리블.'},
+            'OPPONENT_4': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team2\mid2_leon_goretzka.avif',
+                           'profile': '포지션: 공격수\n나이: 22세\n키: 178cm\n특징: 빠른 스피드와 드리블.'},
+            'OPPONENT_3': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team2\mid3_jamal_musiala.avif',
+                           'profile': '포지션: 공격수\n나이: 22세\n키: 178cm\n특징: 빠른 스피드와 드리블.'},
+            'OPPONENT_2': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team2\fw1_serge_gnabry.avif',
+                           'profile': '포지션: 공격수\n나이: 22세\n키: 178cm\n특징: 빠른 스피드와 드리블.'},
+            'OPPONENT_1': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team2\fw2_harry-kane.avif',
+                           'profile': '포지션: 공격수\n나이: 22세\n키: 178cm\n특징: 빠른 스피드와 드리블.'},
+            'OPPONENT_0': {'photo': r'C:\Users\chawo\PycharmProjects\PlayersProfile\Team2\fw3_nicolas-jackson.avif',
+                           'profile': '포지션: 공격수\n나이: 22세\n키: 178cm\n특징: 빠른 스피드와 드리블.'},
+            # 여기에 더 많은 선수 프로필을 추가할 수 있습니다.
+            # 'photo' 경로는 실제 사진 파일 경로로 대체해야 합니다.
         }
+        # 대체 이미지 경로 (사진 파일이 없을 경우 사용)
         self.default_photo_path = 'default_player.jpg'
 
         # 2. 메인 콘텐츠 (왼쪽) - 이미지 프레임
@@ -324,7 +368,7 @@ class App(ctk.CTk):
         self.image_canvas.grid(row=0, column=0, sticky="nsew")
         self.image_item = self.image_canvas.create_image(0, 0, anchor="nw", image=None)
 
-        # 줌 이벤트 바인딩
+        # 줌 이벤트 바인딩 (생략 없이 유지)
         self.image_canvas.bind("<MouseWheel>", self.zoom_handler)
         self.image_canvas.bind("<Button-4>", lambda event: self.zoom_handler(event, 1))
         self.image_canvas.bind("<Button-5>", lambda event: self.zoom_handler(event, -1))
@@ -341,7 +385,7 @@ class App(ctk.CTk):
             font=("Arial", 20)
         )
 
-        # 데이터 전처리 및 분류 실행
+        # 🚨 1. 데이터 전처리 및 분류 실행 (딱 한 번)
         print("시작: YOLO 탐지 및 K-means 팀 분류...")
         self.original_img, self.player_data, self.ball_boxes = process_detection_and_classification(self.model,
                                                                                                     TEST_IMAGE_PATH)
@@ -351,20 +395,19 @@ class App(ctk.CTk):
             self.display_error_ui(f"❌ 오류: 이미지 로드 또는 모델 처리 실패.\n경로 확인: '{TEST_IMAGE_PATH}' 또는 '{MODEL_PATH}'")
             return
 
-        # 4. 목록 패널 설정
+        # 4. 목록 패널 설정 (변경 없음)
         self.sidebar_frame = ctk.CTkFrame(self, width=250, corner_radius=10, fg_color="#444444")
         self.sidebar_frame.grid(row=0, column=1, padx=(0, 10), pady=10, sticky="nsew")
         self.sidebar_frame.grid_columnconfigure(0, weight=1)
-        # grid row 설정: 0: 제목, 1: 체크박스, 2: 초기화, 3: 범례, 4: 선수 목록 (weight 1)
-        for i in range(5): self.sidebar_frame.grid_rowconfigure(i, weight=0)
-        self.sidebar_frame.grid_rowconfigure(4, weight=1)
+        for i in range(4): self.sidebar_frame.grid_rowconfigure(i, weight=0)
+        self.sidebar_frame.grid_rowconfigure(3, weight=1)
 
         self.sidebar_title = ctk.CTkLabel(self.sidebar_frame,
-                                          text="선수 보기 옵션 및 목록",
+                                          text="선수 보기 옵션 및 현재 목록",
                                           font=ctk.CTkFont(size=18, weight="bold"))
         self.sidebar_title.grid(row=0, column=0, padx=10, pady=(15, 5), sticky="n")
 
-        # 5. 필터 체크박스 섹션
+        # 5. 필터 체크박스 섹션 (변경 없음)
         self.checkbox_scroll_frame = ctk.CTkFrame(self.sidebar_frame, height=120)
         self.checkbox_scroll_frame.grid(row=1, column=0, padx=10, pady=(1, 1), sticky="nsew")
 
@@ -388,7 +431,7 @@ class App(ctk.CTk):
             self.checkboxes[filter_key] = checkbox
             checkbox.pack(pady=(5, 3), padx=10, anchor="w")
 
-        # 6. 초기화 버튼
+        # 6. 초기화 버튼 (변경 없음)
         self.reset_button = ctk.CTkButton(self.sidebar_frame,
                                           text="필터 초기화 (원본 이미지)",
                                           command=self.reset_filters,
@@ -397,51 +440,19 @@ class App(ctk.CTk):
 
         self.reset_button.grid(row=2, column=0, padx=20, pady=(5, 10), sticky="ew")
 
-        # 🚨 7. 팀 색상 범례(Legend) 섹션 추가
-        self.legend_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
-        self.legend_frame.grid(row=3, column=0, padx=10, pady=(0, 10), sticky="ew")
-        self.legend_frame.grid_columnconfigure((0, 2), weight=0)  # 사각형은 고정 크기
-        self.legend_frame.grid_columnconfigure((1, 3), weight=1)  # 텍스트는 공간 차지
-
-        # Team 1 (OURS) 범례
-        team1_color_box = ctk.CTkLabel(self.legend_frame, text="", width=15, height=15,
-                                       fg_color=CTK_COLOR_OURS, corner_radius=3)
-        team1_color_box.grid(row=0, column=0, padx=(0, 5), pady=5, sticky="w")
-
-        team1_text = ctk.CTkLabel(self.legend_frame, text=": FC 바르셀로나(홈팀)", anchor="w")
-        team1_text.grid(row=0, column=1, padx=(0, 5), pady=5, sticky="ew")
-
-        # Team 2 (OPPONENT) 범례
-        team2_color_box = ctk.CTkLabel(self.legend_frame, text="", width=15, height=15,
-                                       fg_color=CTK_COLOR_OPPONENT, corner_radius=3)
-        team2_color_box.grid(row=0, column=2, padx=(10, 5), pady=5, sticky="w")
-
-        team2_text = ctk.CTkLabel(self.legend_frame, text=": FC 바이에른 뮌헨(어웨이팀)", anchor="w")
-        team2_text.grid(row=0, column=3, padx=(0, 0), pady=5, sticky="ew")
-
-        # 8. 선수 목록 프레임
-        # 🚨 row=4로 변경됨
+        # 7. 선수 목록 프레임 (변경 없음)
         self.player_list_frame = ctk.CTkScrollableFrame(self.sidebar_frame,
                                                         label_text="현재 표시 선수 목록 (0명)",
                                                         fg_color="transparent")
 
-        self.player_list_frame.grid(row=4, column=0, padx=10, pady=(5, 10), sticky="nsew")
+        self.player_list_frame.grid(row=3, column=0, padx=10, pady=(5, 10), sticky="nsew")
 
-        self.player_list_items = []
+        self.player_list_items = []  # 라벨과 버튼 프레임을 저장할 리스트
 
-        # 9. 초기 상태 설정
+        # 8. 초기 상태 설정
         self.reset_filters()
 
-    def display_error_ui(self, message):
-        """오류 발생 시 오류 메시지만 표시하는 UI로 대체"""
-        error_label = ctk.CTkLabel(self, text=message, text_color="red", font=ctk.CTkFont(size=20, weight="bold"))
-        error_label.grid(row=0, column=0, columnspan=2, padx=20, pady=20, sticky="nsew")
-        self.image_canvas.delete(self.loading_text)
-
-    # =========================================================
-    # V. Zoom 및 Canvas 관련 함수
-    # =========================================================
-
+    # ... (기존 move_start, move_move, zoom_handler, on_canvas_resize, update_image_display 함수 생략 - 내용 동일) ...
     def move_start(self, event):
         """이미지 이동 시작 시점 (마우스 버튼 클릭)"""
         self.image_canvas.scan_mark(event.x, event.y)
@@ -453,7 +464,6 @@ class App(ctk.CTk):
     def zoom_handler(self, event, direction=None):
         """마우스 휠 이벤트 발생 시 줌 인/아웃 처리"""
         scale_factor = 1.1
-
         if direction is not None:
             if direction == 1:
                 delta = 1
@@ -468,7 +478,6 @@ class App(ctk.CTk):
             self.zoom_factor /= scale_factor
 
         self.zoom_factor = max(0.5, min(self.zoom_factor, 5.0))
-
         self.update_image_display(self.current_filter_type, zoom_update=True)
 
     def on_canvas_resize(self, event):
@@ -484,12 +493,15 @@ class App(ctk.CTk):
 
         self.current_filter_type = filter_type
 
+        # 1. 시각화 및 선수 목록 필터링
         classified_img_bgr, players_to_draw = visualize_results(self.original_img, self.player_data, self.ball_boxes,
                                                                 filter_type)
 
+        # 2. BGR -> RGB 변환 및 PIL Image로 변환
         img_rgb = cv2.cvtColor(classified_img_bgr, cv2.COLOR_BGR2RGB)
         pil_image = Image.fromarray(img_rgb)
 
+        # 3. GUI 크기 및 줌 배율에 맞게 이미지 리사이즈
         canvas_width = self.image_canvas.winfo_width()
         canvas_height = self.image_canvas.winfo_height()
 
@@ -511,108 +523,64 @@ class App(ctk.CTk):
 
         resized_image = pil_image.resize((display_width, display_height), Image.Resampling.LANCZOS)
 
+        # 4. CustomTkinter 이미지 객체 생성 및 캔버스 업데이트
         self.current_tk_image = ImageTk.PhotoImage(image=resized_image)
-
         center_x = canvas_width // 2
         center_y = canvas_height // 2
 
         self.image_canvas.delete(self.loading_text)
-
         self.image_canvas.itemconfig(self.image_item, image=self.current_tk_image)
         self.image_canvas.coords(self.image_item, center_x - display_width // 2, center_y - display_height // 2)
 
+        # 5. 선수 목록 업데이트 호출
         self.update_player_list(players_to_draw)
 
     # =========================================================
-    # VI. 기능 함수 정의
+    # VI. 기능 함수 정의 (수정/추가)
     # =========================================================
 
     def show_player_profile(self, player_id, name):
         """
-        선수 프로필 팝업 창을 띄우고, 사진에 줌 기능을 추가합니다.
+        선수 프로필 팝업 창을 띄웁니다.
         """
+        # 팝업 윈도우 생성
         profile_window = ctk.CTkToplevel(self)
-        profile_window.title(f"{name} 선수 프로필 (Zoom 지원)")
-        profile_window.geometry("400x550")
+        profile_window.title(f"{name} 선수 프로필")
+        profile_window.geometry("400x500")
         profile_window.resizable(False, False)
-        profile_window.attributes('-topmost', True)
+        profile_window.attributes('-topmost', True)  # 항상 위에 표시
 
+        # 중앙 프레임
         main_frame = ctk.CTkFrame(profile_window, fg_color="transparent")
         main_frame.pack(fill="both", expand=True, padx=15, pady=15)
         main_frame.grid_columnconfigure(0, weight=1)
 
-        # 선수 데이터 가져오기
+        # 선수 데이터 가져오기 (없으면 기본값 사용)
         profile_data = self.player_profiles.get(player_id,
                                                 {'photo': self.default_photo_path,
                                                  'profile': '프로필 정보 없음.'})
         photo_path = profile_data['photo']
         profile_text = profile_data['profile']
 
-        initial_photo_size = (180, 240)
-        self.profile_zoom_factor = 1.0
-        self.profile_current_tk_image = None
-        self.profile_original_image = None
-
-        # 1. 선수 사진 로드 및 초기 설정
+        # 1. 선수 사진 표시
+        photo_size = (400, 500)
         try:
+            # 사진 파일 확인 및 로드
             if not os.path.exists(photo_path):
                 print(f"경고: 선수 사진 파일 '{photo_path}'이(가) 존재하지 않습니다. 기본 이미지를 사용합니다.")
                 photo_path = self.default_photo_path
 
-            self.profile_original_image = Image.open(photo_path)
-
+            img = Image.open(photo_path).resize(photo_size, Image.Resampling.LANCZOS)
+            photo_tk = ImageTk.PhotoImage(img)
         except Exception as e:
             print(f"사진 로드 중 오류 발생 ({photo_path}): {e}")
-            self.profile_original_image = Image.new('RGB', initial_photo_size, color='gray')
+            # 오류 발생 시 빈 이미지 사용
+            img = Image.new('RGB', photo_size, color='gray')
+            photo_tk = ImageTk.PhotoImage(img)
 
-        # 1-1. 사진을 표시할 캔버스 생성 및 설정
-        self.profile_canvas = ctk.CTkCanvas(main_frame, width=200, height=280,
-                                            bg=main_frame.cget("fg_color"),
-                                            highlightthickness=1,
-                                            highlightbackground="gray")
-        self.profile_canvas.grid(row=0, column=0, pady=(0, 10), sticky="n")
-
-        self.profile_image_item = self.profile_canvas.create_image(
-            10, 10, anchor="nw", image=None
-        )
-
-        def update_photo_zoom(event=None):
-            """현재 줌 팩터에 따라 사진을 리사이즈하고 캔버스에 표시합니다."""
-
-            if event:
-                scale_factor = 1.1
-                # Windows/macOS event.delta, Linux event.num (4: up, 5: down)
-                if event.num == 5 or (hasattr(event, 'delta') and event.delta < 0):  # Zoom Out
-                    self.profile_zoom_factor /= scale_factor
-                elif event.num == 4 or (hasattr(event, 'delta') and event.delta > 0):  # Zoom In
-                    self.profile_zoom_factor *= scale_factor
-
-            self.profile_zoom_factor = max(0.5, min(self.profile_zoom_factor, 5.0))
-
-            orig_w, orig_h = self.profile_original_image.size
-            new_w = int(orig_w * self.profile_zoom_factor)
-            new_h = int(orig_h * self.profile_zoom_factor)
-
-            resized_img = self.profile_original_image.resize((new_w, new_h), Image.Resampling.LANCZOS)
-            self.profile_current_tk_image = ImageTk.PhotoImage(resized_img)
-
-            canvas_w = self.profile_canvas.winfo_width()
-            canvas_h = self.profile_canvas.winfo_height()
-
-            center_x = (canvas_w - new_w) // 2
-            center_y = (canvas_h - new_h) // 2
-
-            self.profile_canvas.itemconfig(self.profile_image_item, image=self.profile_current_tk_image)
-            self.profile_canvas.coords(self.profile_image_item, max(0, center_x), max(0, center_y))
-            self.profile_canvas.config(scrollregion=self.profile_canvas.bbox("all"))
-
-        # 1-2. 줌 이벤트 바인딩
-        self.profile_canvas.bind("<MouseWheel>", update_photo_zoom)
-        self.profile_canvas.bind("<Button-4>", update_photo_zoom)
-        self.profile_canvas.bind("<Button-5>", update_photo_zoom)
-
-        # 1-3. 초기 이미지 표시
-        update_photo_zoom()
+        photo_label = ctk.CTkLabel(main_frame, text="", image=photo_tk)
+        photo_label.image = photo_tk  # 가비지 컬렉션 방지
+        photo_label.grid(row=0, column=0, pady=(0, 10), sticky="n")
 
         # 2. 선수 이름 (제목)
         name_label = ctk.CTkLabel(main_frame, text=name, font=ctk.CTkFont(size=20, weight="bold"))
@@ -631,7 +599,7 @@ class App(ctk.CTk):
 
     def update_player_list(self, players_to_draw):
         """
-        현재 화면에 표시된 선수들만 목록에 업데이트하고, 팀 색상 박스를 사용합니다.
+        현재 화면에 표시된 선수들만 목록에 업데이트하고 '조회' 버튼을 추가합니다.
         """
         # 기존 항목 모두 삭제
         for item in self.player_list_items:
@@ -640,47 +608,33 @@ class App(ctk.CTk):
 
         # 새 항목(프레임 + 라벨 + 버튼) 생성
         for player in players_to_draw:
-            player_name = player['name']
-            player_id = player.get('id', 'UNKNOWN')
-            team = player['team']
+            player_info = f"[{player['team'].replace('TEAM_', '')}] {player['name']}"
+            player_id = player.get('id', 'UNKNOWN')  # 고유 ID를 가져옴
 
-            # 1. 팀별 색상 결정
-            if team == "TEAM_OURS":
-                bg_color = CTK_COLOR_OURS
-            elif team == "TEAM_OPPONENT":
-                bg_color = CTK_COLOR_OPPONENT
-            else:
-                bg_color = CTK_COLOR_OTHER
-
-            text_color = "white"
-
-            # 2. 항목 전체를 담을 프레임 생성 (선수 정보와 버튼을 가로로 배치)
+            # 1. 항목 전체를 담을 프레임 생성 (선수 정보와 버튼을 가로로 배치)
             item_frame = ctk.CTkFrame(self.player_list_frame, fg_color="transparent")
             item_frame.pack(fill="x", padx=5, pady=2)
-            item_frame.grid_columnconfigure(0, weight=1)
+            item_frame.grid_columnconfigure(0, weight=1)  # 라벨이 공간을 차지하도록 설정
 
-            # 3. 선수 이름 라벨 (배경색 지정)
+            # 2. 선수 정보 라벨 (왼쪽)
             player_label = ctk.CTkLabel(item_frame,
-                                        text=player_name,
+                                        text=player_info,
                                         anchor="w",
-                                        padx=10,
-                                        pady=5,
-                                        fg_color=bg_color,
-                                        text_color=text_color,
-                                        corner_radius=5)
+                                        padx=5,
+                                        pady=2)
             player_label.grid(row=0, column=0, sticky="ew")
 
-            # 4. 조회 버튼 (오른쪽)
+            # 3. 조회 버튼 (오른쪽)
             view_button = ctk.CTkButton(item_frame,
                                         text="조회",
                                         width=50,
                                         height=20,
                                         font=ctk.CTkFont(size=12, weight="bold"),
-                                        command=lambda pid=player_id, pname=player_name: self.show_player_profile(pid,
-                                                                                                                  pname))
+                                        command=lambda pid=player_id, pname=player['name']: self.show_player_profile(
+                                            pid, pname))
             view_button.grid(row=0, column=1, padx=(5, 0), sticky="e")
 
-            item_frame.grid_rowconfigure(0, weight=1)
+            # 항목 저장
             self.player_list_items.append(item_frame)
 
         # 라벨 업데이트
@@ -693,11 +647,12 @@ class App(ctk.CTk):
         for checkbox in self.checkboxes.values():
             checkbox.deselect()
 
-        self.zoom_factor = 1.0
+        self.zoom_factor = 1.0  # 줌 배율 초기화
+        # 캔버스 스크롤 위치 초기화
         self.image_canvas.xview_moveto(0)
         self.image_canvas.yview_moveto(0)
 
-        self.update_image_display('NONE')
+        self.update_image_display('NONE')  # 원본 이미지를 표시
         print("모든 필터가 초기화되었습니다. (원본 이미지 보기)")
 
     def toggle_checkboxes(self, selected_filter_key):
@@ -706,18 +661,21 @@ class App(ctk.CTk):
         """
         selected_checkbox = self.checkboxes[selected_filter_key]
 
+        # 1. 체크박스가 선택된 경우: 다른 모든 체크박스 해제 및 이미지 업데이트
         if selected_checkbox.get() == 1:
             for filter_key, checkbox in self.checkboxes.items():
                 if filter_key != selected_filter_key:
                     checkbox.deselect()
 
+            # 선택된 필터로 이미지 업데이트
             self.update_image_display(selected_filter_key)
 
+        # 2. 체크박스가 해제된 경우: 모든 체크박스가 해제되었다면 원본 이미지 상태로 전환
         else:
             is_any_checked = any(cb.get() == 1 for cb in self.checkboxes.values())
 
             if not is_any_checked:
-                self.update_image_display('NONE')
+                self.update_image_display('NONE')  # 원본 이미지 상태로 전환
 
 
 # =========================================================
